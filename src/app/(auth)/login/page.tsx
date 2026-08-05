@@ -2,14 +2,34 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Car, Mail, Lock } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Car, Mail, Lock, AlertCircle } from "lucide-react";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import ThemeToggle from "@/components/ui/ThemeToggle";
+import { useAuth } from "@/lib/auth-context";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("");
+  const router = useRouter();
+  const { login } = useAuth();
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+
+    const result = await login(username, password);
+    if (result.error) {
+      setError(result.error);
+      setLoading(false);
+    } else {
+      router.push("/dashboard");
+    }
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-4 relative overflow-hidden">
@@ -39,17 +59,23 @@ export default function LoginPage() {
         </div>
 
         <div className="bg-card rounded-2xl border border-border p-8 shadow-xl glow-border">
-          <form className="space-y-5" onSubmit={(e) => e.preventDefault()}>
+          {error && (
+            <div className="flex items-center gap-2 p-3 mb-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-600 dark:text-red-400 text-sm">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              {error}
+            </div>
+          )}
+
+          <form className="space-y-5" onSubmit={handleSubmit}>
             <div className="relative">
               <Mail className="absolute left-3.5 top-[38px] w-4 h-4 text-muted-foreground" />
               <Input
-                label="Email"
-                type="email"
-                id="email"
-                placeholder="you@example.com"
+                label="Username"
+                id="username"
+                placeholder="Enter username"
                 className="pl-10"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
               />
             </div>
             <div className="relative">
@@ -58,32 +84,24 @@ export default function LoginPage() {
                 label="Password"
                 type="password"
                 id="password"
-                placeholder="Enter your password"
+                placeholder="Enter password"
                 className="pl-10"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
             </div>
-            <div className="flex items-center justify-between text-sm">
-              <label className="flex items-center gap-2 text-muted-foreground">
-                <input type="checkbox" className="w-4 h-4 rounded border-border bg-surface accent-accent" />
-                Remember me
-              </label>
-              <Link href="#" className="text-accent hover:text-accent/80 font-medium">
-                Forgot password?
-              </Link>
-            </div>
-            <Button type="submit" className="w-full">
-              Sign In
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? "Signing in..." : "Sign In"}
             </Button>
           </form>
 
-          <div className="mt-6 pt-6 border-t border-border text-center">
-            <p className="text-sm text-muted-foreground">
-              Don&apos;t have an account?{" "}
-              <Link href="/register" className="text-accent hover:text-accent/80 font-semibold">
-                Sign up
-              </Link>
+          <div className="mt-4 p-3 bg-surface rounded-xl border border-border">
+            <p className="text-xs text-muted-foreground font-medium mb-1">Demo Credentials:</p>
+            <p className="text-xs text-muted-foreground">
+              Admin: <span className="font-mono text-foreground">admin</span> / <span className="font-mono text-foreground">admin123</span>
+            </p>
+            <p className="text-xs text-muted-foreground">
+              User: <span className="font-mono text-foreground">rahul</span> / <span className="font-mono text-foreground">rahul123</span>
             </p>
           </div>
         </div>

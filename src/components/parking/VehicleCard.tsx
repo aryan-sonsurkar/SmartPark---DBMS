@@ -7,22 +7,22 @@ interface VehicleCardProps {
 }
 
 const typeIcons: Record<string, typeof Car> = {
-  car: Car,
-  bike: Bike,
-  truck: Truck,
-  suv: SquareParking,
+  Car: Car,
+  Bike: Bike,
+  Truck: Truck,
+  SUV: SquareParking,
 };
 
 const typeColors: Record<string, string> = {
-  car: "bg-blue-500/10 text-blue-500 ring-blue-500/20",
-  bike: "bg-violet-500/10 text-violet-500 ring-violet-500/20",
-  truck: "bg-amber-500/10 text-amber-500 ring-amber-500/20",
-  suv: "bg-emerald-500/10 text-emerald-500 ring-emerald-500/20",
+  Car: "bg-blue-500/10 text-blue-500 ring-blue-500/20",
+  Bike: "bg-violet-500/10 text-violet-500 ring-violet-500/20",
+  Truck: "bg-amber-500/10 text-amber-500 ring-amber-500/20",
+  SUV: "bg-emerald-500/10 text-emerald-500 ring-emerald-500/20",
 };
 
 export default function VehicleCard({ vehicle, actions }: VehicleCardProps) {
   const Icon = typeIcons[vehicle.vehicle_type] || Car;
-  const color = typeColors[vehicle.vehicle_type] || typeColors.car;
+  const color = typeColors[vehicle.vehicle_type] || typeColors.Car;
 
   return (
     <div className="bg-card rounded-2xl border border-border p-5 hover:shadow-lg hover:border-accent/20 transition-all duration-300 group">
@@ -32,9 +32,9 @@ export default function VehicleCard({ vehicle, actions }: VehicleCardProps) {
             <Icon className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="font-bold text-foreground tracking-tight font-mono">{vehicle.plate_number}</h3>
+            <h3 className="font-bold text-foreground tracking-tight font-mono">{vehicle.vehicle_number}</h3>
             <p className="text-sm text-muted-foreground mt-0.5">
-              {vehicle.model} &middot; {vehicle.color}
+              {vehicle.owner?.owner_name || `Owner #${vehicle.owner_id}`}
             </p>
           </div>
         </div>

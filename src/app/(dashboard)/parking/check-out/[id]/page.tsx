@@ -1,19 +1,72 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Clock, CreditCard, MapPin, ArrowLeft } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Select from "@/components/ui/Select";
-import { mockRecords } from "@/lib/mock-data";
+import { fetchRecords, checkOut, addPayment, updateSlotStatus } from "@/lib/db";
+import type { ParkingRecord } from "@/types";
 
 export default function CheckOutPage() {
   const router = useRouter();
-  const [paymentMethod, setPaymentMethod] = useState("upi");
+  const [record, setRecord] = useState<ParkingRecord | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState("UPI");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-  const activeRecord = mockRecords.find((r) => r.status === "active");
+  useEffect(() => {
+    fetchRecords()
+      .then((records) => {
+        const active = records.find((r) => r.exit_time === null);
+        setRecord(active || null);
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
 
-  if (!activeRecord) {
+  const handleCheckOut = async () => {
+    if (!record) return;
+    setSaving(true);
+    try {
+      const entryTime = new Date(record.entry_time);
+      const now = new Date();
+      const hours = Math.ceil((now.getTime() - entryTime.getTime()) / (1000 * 60 * 60));
+      const amount = hours * 50;
+
+      // Create payment
+      await addPayment({
+        payment_id: `P${Date.now()}`,
+        record_id: record.record_id,
+        amount,
+        payment_mode: paymentMethod,
+      });
+
+      // Update record exit time
+      await checkOut(record.record_id);
+
+      // Free up the slot
+      await updateSlotStatus(record.slot_id, "Available");
+
+      alert(`Payment of ₹${amount} processed. Check-out successful!`);
+      router.push("/parking");
+    } catch (err) {
+      console.error(err);
+      alert("Error during check-out");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!record) {
     return (
       <div className="space-y-6">
         <h1 className="text-2xl font-bold text-foreground tracking-tight">Check Out</h1>
@@ -27,12 +80,11 @@ export default function CheckOutPage() {
     );
   }
 
-  const entryTime = new Date(activeRecord.entry_time);
+  const entryTime = new Date(record.entry_time);
   const now = new Date();
   const durationMs = now.getTime() - entryTime.getTime();
-  const hours = Math.floor(durationMs / (1000 * 60 * 60));
-  const minutes = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
-  const amount = hours * 50 + (minutes > 0 ? 50 : 0);
+  const hours = Math.max(1, Math.ceil(durationMs / (1000 * 60 * 60)));
+  const amount = hours * 50;
 
   return (
     <div className="space-y-6 max-w-lg">
@@ -47,8 +99,8 @@ export default function CheckOutPage() {
             <MapPin className="w-5 h-5 text-accent" />
           </div>
           <div>
-            <p className="font-bold text-foreground">Slot {activeRecord.slot?.slot_number}</p>
-            <p className="text-sm text-muted-foreground">Floor {activeRecord.slot?.floor}</p>
+            <p className="font-bold text-foreground">Slot {record.slot?.slot_number}</p>
+            <p className="text-sm text-muted-foreground">Record #{record.record_id}</p>
           </div>
         </div>
 
@@ -57,9 +109,7 @@ export default function CheckOutPage() {
             <Clock className="w-5 h-5 text-neon" />
           </div>
           <div>
-            <p className="font-bold text-foreground">
-              {hours}h {minutes}m
-            </p>
+            <p className="font-bold text-foreground">{hours}h parked</p>
             <p className="text-sm text-muted-foreground">
               Entry: {entryTime.toLocaleTimeString()} &middot; {entryTime.toLocaleDateString()}
             </p>
@@ -69,14 +119,11 @@ export default function CheckOutPage() {
         <div className="border-t border-border pt-4 space-y-3">
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">Vehicle</span>
-            <span className="font-bold text-foreground font-mono">{activeRecord.vehicle?.plate_number}</span>
+            <span className="font-bold text-foreground font-mono">{record.vehicle?.vehicle_number}</span>
           </div>
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">Duration</span>
-            <span className="font-bold text-foreground">
-              {hours > 0 ? `${hours}h ` : ""}
-              {minutes}m
-            </span>
+            <span className="font-bold text-foreground">{hours}h</span>
           </div>
           <div className="flex items-center justify-between border-t border-border pt-3">
             <span className="font-bold text-foreground">Total Amount</span>
@@ -89,9 +136,9 @@ export default function CheckOutPage() {
           value={paymentMethod}
           onChange={(e) => setPaymentMethod(e.target.value)}
           options={[
-            { value: "upi", label: "UPI" },
-            { value: "cash", label: "Cash" },
-            { value: "card", label: "Card" },
+            { value: "UPI", label: "UPI" },
+            { value: "Cash", label: "Cash" },
+            { value: "Card", label: "Card" },
           ]}
         />
 
@@ -99,8 +146,8 @@ export default function CheckOutPage() {
           <Button variant="ghost" onClick={() => router.back()} className="flex-1">
             <ArrowLeft className="w-4 h-4" /> Go Back
           </Button>
-          <Button className="flex-1">
-            <CreditCard className="w-4 h-4" /> Pay ₹{amount}
+          <Button className="flex-1" onClick={handleCheckOut} disabled={saving}>
+            <CreditCard className="w-4 h-4" /> {saving ? "Processing..." : `Pay ₹${amount}`}
           </Button>
         </div>
       </div>

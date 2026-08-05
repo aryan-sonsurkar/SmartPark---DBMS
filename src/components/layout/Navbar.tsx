@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Car, Menu, X, LogOut, User } from "lucide-react";
 import { useState } from "react";
-import { mockUser } from "@/lib/mock-data";
 import ThemeToggle from "@/components/ui/ThemeToggle";
+import { useAuth } from "@/lib/auth-context";
 
 const navLinks = [
   { href: "/dashboard", label: "Dashboard" },
@@ -14,8 +14,14 @@ const navLinks = [
 
 export default function Navbar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const { user, logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const user = mockUser;
+
+  const handleLogout = () => {
+    logout();
+    router.push("/login");
+  };
 
   return (
     <nav className="glass border-b border-border sticky top-0 z-50">
@@ -45,7 +51,7 @@ export default function Navbar() {
                 {link.label}
               </Link>
             ))}
-            {user.role === "admin" && (
+            {user?.role === "admin" && (
               <Link
                 href="/admin"
                 className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${
@@ -66,9 +72,12 @@ export default function Navbar() {
               <div className="w-7 h-7 rounded-lg gradient-bg flex items-center justify-center">
                 <User className="w-3.5 h-3.5 text-white" />
               </div>
-              <span className="text-sm font-medium">{user.full_name}</span>
+              <div className="text-sm">
+                <span className="font-medium">{user?.full_name}</span>
+                <span className="text-muted-foreground text-xs ml-1.5 capitalize">({user?.role})</span>
+              </div>
             </div>
-            <button className="p-2.5 rounded-xl hover:bg-surface text-muted-foreground hover:text-foreground transition-colors border border-transparent hover:border-border">
+            <button onClick={handleLogout} className="p-2.5 rounded-xl hover:bg-surface text-muted-foreground hover:text-foreground transition-colors border border-transparent hover:border-border">
               <LogOut className="w-4 h-4" />
             </button>
           </div>
@@ -94,7 +103,7 @@ export default function Navbar() {
                 {link.label}
               </Link>
             ))}
-            {user.role === "admin" && (
+            {user?.role === "admin" && (
               <Link
                 href="/admin"
                 onClick={() => setMobileOpen(false)}
@@ -105,8 +114,11 @@ export default function Navbar() {
                 Admin
               </Link>
             )}
-            <div className="pt-2">
+            <div className="pt-2 flex items-center gap-2">
               <ThemeToggle />
+              <button onClick={handleLogout} className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium text-red-500 hover:bg-red-500/10 transition-all">
+                Logout
+              </button>
             </div>
           </div>
         </div>
