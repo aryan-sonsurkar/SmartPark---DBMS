@@ -11,18 +11,17 @@ DROP TABLE IF EXISTS parking_record CASCADE;
 DROP TABLE IF EXISTS parking_slot CASCADE;
 DROP TABLE IF EXISTS vehicle CASCADE;
 DROP TABLE IF EXISTS owner CASCADE;
-DROP TABLE IF EXISTS app_user CASCADE;
+DROP TABLE IF EXISTS profiles CASCADE;
 
 -- ============================================================
--- 0. APP_USER TABLE (Simple password auth)
+-- 0. PROFILES TABLE (linked to Supabase Auth)
 -- ============================================================
-CREATE TABLE app_user (
-    user_id SERIAL PRIMARY KEY,
-    username VARCHAR(50) NOT NULL UNIQUE,
-    password VARCHAR(100) NOT NULL,
-    full_name VARCHAR(100) NOT NULL,
-    role VARCHAR(10) NOT NULL DEFAULT 'user' CHECK (role IN ('admin', 'user')),
-    owner_id INT
+CREATE TABLE profiles (
+    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    full_name TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('admin', 'user')),
+    owner_id INT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- ============================================================
@@ -35,7 +34,7 @@ CREATE TABLE owner (
 );
 
 -- Add FK constraint after owner table exists
-ALTER TABLE app_user ADD CONSTRAINT fk_app_user_owner
+ALTER TABLE profiles ADD CONSTRAINT fk_profiles_owner
     FOREIGN KEY (owner_id) REFERENCES owner(owner_id);
 
 -- ============================================================
@@ -94,6 +93,7 @@ CREATE TABLE payment (
 -- ============================================================
 -- INDEXES for faster queries
 -- ============================================================
+CREATE INDEX idx_profiles_owner ON profiles(owner_id);
 CREATE INDEX idx_vehicle_owner ON vehicle(owner_id);
 CREATE INDEX idx_parking_record_vehicle ON parking_record(vehicle_id);
 CREATE INDEX idx_parking_record_slot ON parking_record(slot_id);
@@ -103,7 +103,7 @@ CREATE INDEX idx_payment_record ON payment(record_id);
 -- ============================================================
 -- ENABLE ROW LEVEL SECURITY (RLS)
 -- ============================================================
-ALTER TABLE app_user ENABLE ROW LEVEL SECURITY;
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE owner ENABLE ROW LEVEL SECURITY;
 ALTER TABLE vehicle ENABLE ROW LEVEL SECURITY;
 ALTER TABLE parking_slot ENABLE ROW LEVEL SECURITY;
@@ -112,55 +112,88 @@ ALTER TABLE payment ENABLE ROW LEVEL SECURITY;
 
 -- ============================================================
 -- RLS POLICIES
--- Allow all operations for authenticated and anonymous users
--- (Adjust these later based on your auth requirements)
 -- ============================================================
 
--- APP_USER policies
-CREATE POLICY "Allow all on app_user" ON app_user
-    FOR ALL
-    USING (true)
-    WITH CHECK (true);
+-- PROFILES: users can read all profiles, but only update their own
+CREATE POLICY "Users can view all profiles" ON profiles
+    FOR SELECT USING (true);
 
--- OWNER policies
-CREATE POLICY "Allow all on owner" ON owner
-    FOR ALL
-    USING (true)
-    WITH CHECK (true);
+CREATE POLICY "Users can update own profile" ON profiles
+    FOR UPDATE USING (auth.uid() = id);
 
--- VEHICLE policies
-CREATE POLICY "Allow all on vehicle" ON vehicle
-    FOR ALL
-    USING (true)
-    WITH CHECK (true);
+CREATE POLICY "Users can insert own profile" ON profiles
+    FOR INSERT WITH CHECK (auth.uid() = id);
 
--- PARKING_SLOT policies
-CREATE POLICY "Allow all on parking_slot" ON parking_slot
-    FOR ALL
-    USING (true)
-    WITH CHECK (true);
+-- OWNER: everyone can read, authenticated users can insert
+CREATE POLICY "Allow read on owner" ON owner
+    FOR SELECT USING (true);
 
--- PARKING_RECORD policies
-CREATE POLICY "Allow all on parking_record" ON parking_record
-    FOR ALL
-    USING (true)
-    WITH CHECK (true);
+CREATE POLICY "Allow insert on owner" ON owner
+    FOR INSERT WITH CHECK (true);
 
--- PAYMENT policies
-CREATE POLICY "Allow all on payment" ON payment
-    FOR ALL
-    USING (true)
-    WITH CHECK (true);
+-- VEHICLE: everyone can read, authenticated users can manage
+CREATE POLICY "Allow read on vehicle" ON vehicle
+    FOR SELECT USING (true);
+
+CREATE POLICY "Allow insert on vehicle" ON vehicle
+    FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "Allow update on vehicle" ON vehicle
+    FOR UPDATE USING (true);
+
+CREATE POLICY "Allow delete on vehicle" ON vehicle
+    FOR DELETE USING (true);
+
+-- PARKING_SLOT: everyone can read and update (for real-time status)
+CREATE POLICY "Allow read on parking_slot" ON parking_slot
+    FOR SELECT USING (true);
+
+CREATE POLICY "Allow insert on parking_slot" ON parking_slot
+    FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "Allow update on parking_slot" ON parking_slot
+    FOR UPDATE USING (true);
+
+CREATE POLICY "Allow delete on parking_slot" ON parking_slot
+    FOR DELETE USING (true);
+
+-- PARKING_RECORD: everyone can read and manage
+CREATE POLICY "Allow read on parking_record" ON parking_record
+    FOR SELECT USING (true);
+
+CREATE POLICY "Allow insert on parking_record" ON parking_record
+    FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "Allow update on parking_record" ON parking_record
+    FOR UPDATE USING (true);
+
+-- PAYMENT: everyone can read and insert
+CREATE POLICY "Allow read on payment" ON payment
+    FOR SELECT USING (true);
+
+CREATE POLICY "Allow insert on payment" ON payment
+    FOR INSERT WITH CHECK (true);
+
+-- ============================================================
+-- FUNCTION: Auto-create profile on signup
+-- ============================================================
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO public.profiles (id, full_name, role)
+    VALUES (new.id, COALESCE(new.raw_user_meta_data->>'full_name', new.email), 'user');
+    RETURN new;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Trigger to auto-create profile
+CREATE OR REPLACE TRIGGER on_auth_user_created
+    AFTER INSERT ON auth.users
+    FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
 -- ============================================================
 -- INSERT SAMPLE DATA
 -- ============================================================
-
--- App Users (simple password auth)
-INSERT INTO app_user (username, password, full_name, role, owner_id) VALUES
-('admin', 'admin123', 'Aryan Sonsurkar', 'admin', 103),
-('rahul', 'rahul123', 'Rahul Sharma', 'user', 101),
-('priya', 'priya123', 'Priya Patil', 'user', 102);
 
 -- Owners
 INSERT INTO owner (owner_id, owner_name, phone_no) VALUES
@@ -209,41 +242,12 @@ INSERT INTO payment (payment_id, record_id, amount, payment_mode) VALUES
 ('P102', 5, 150.00, 'Cash');
 
 -- ============================================================
--- USEFUL QUERIES (for your team to use in the app)
+-- IMPORTANT: Create your first admin user via Supabase Dashboard
+-- 1. Go to Authentication > Users > Add User
+-- 2. Enter email: admin@smartpark.com, Password: admin123
+-- 3. Then run this to make them admin:
+-- UPDATE profiles SET role = 'admin' WHERE id = (SELECT id FROM auth.users WHERE email = 'admin@smartpark.com');
 -- ============================================================
-
--- 1. Get all vehicles with owner details
--- SELECT v.*, o.owner_name, o.phone_no
--- FROM vehicle v
--- JOIN owner o ON v.owner_id = o.owner_id;
-
--- 2. Get available parking slots
--- SELECT * FROM parking_slot WHERE slot_status = 'Available';
-
--- 3. Get active parking sessions (exit_time is NULL)
--- SELECT pr.*, v.vehicle_number, v.vehicle_type, ps.slot_number
--- FROM parking_record pr
--- JOIN vehicle v ON pr.vehicle_id = v.vehicle_id
--- JOIN parking_slot ps ON pr.slot_id = ps.slot_id
--- WHERE pr.exit_time IS NULL;
-
--- 4. Get parking history with payment details
--- SELECT pr.*, v.vehicle_number, ps.slot_number,
---        p.amount, p.payment_mode
--- FROM parking_record pr
--- JOIN vehicle v ON pr.vehicle_id = v.vehicle_id
--- JOIN parking_slot ps ON pr.slot_id = ps.slot_id
--- LEFT JOIN payment p ON pr.record_id = p.record_id
--- ORDER BY pr.entry_time DESC;
-
--- 5. Calculate parking duration and charges
--- SELECT pr.record_id, v.vehicle_number, ps.slot_number,
---        pr.entry_time, pr.exit_time,
---        EXTRACT(EPOCH FROM (COALESCE(pr.exit_time, NOW()) - pr.entry_time))/3600 AS hours_parked,
---        ROUND(EXTRACT(EPOCH FROM (COALESCE(pr.exit_time, NOW()) - pr.entry_time))/3600 * 50, 2) AS estimated_charge
--- FROM parking_record pr
--- JOIN vehicle v ON pr.vehicle_id = v.vehicle_id
--- JOIN parking_slot ps ON pr.slot_id = ps.slot_id;
 
 -- ============================================================
 -- DONE! Your database is ready.

@@ -2,13 +2,37 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Car, Mail, Lock, User, Phone } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Car, Mail, Lock, User, Phone, AlertCircle, CheckCircle } from "lucide-react";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import ThemeToggle from "@/components/ui/ThemeToggle";
+import { useAuth } from "@/lib/auth-context";
 
 export default function RegisterPage() {
+  const router = useRouter();
+  const { register } = useAuth();
   const [form, setForm] = useState({ name: "", email: "", phone: "", password: "" });
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setSuccess("");
+    setLoading(true);
+
+    const result = await register(form.email, form.password, form.name, form.phone);
+    if (result.error) {
+      setError(result.error);
+      setLoading(false);
+    } else {
+      setSuccess("Account created! Check your email for verification, then sign in.");
+      setLoading(false);
+      setTimeout(() => router.push("/login"), 3000);
+    }
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-4 relative overflow-hidden">
@@ -38,7 +62,21 @@ export default function RegisterPage() {
         </div>
 
         <div className="bg-card rounded-2xl border border-border p-8 shadow-xl glow-border">
-          <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
+          {error && (
+            <div className="flex items-center gap-2 p-3 mb-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-600 dark:text-red-400 text-sm">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              {error}
+            </div>
+          )}
+
+          {success && (
+            <div className="flex items-center gap-2 p-3 mb-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-600 dark:text-emerald-400 text-sm">
+              <CheckCircle className="w-4 h-4 shrink-0" />
+              {success}
+            </div>
+          )}
+
+          <form className="space-y-4" onSubmit={handleSubmit}>
             <div className="relative">
               <User className="absolute left-3.5 top-[38px] w-4 h-4 text-muted-foreground" />
               <Input
@@ -86,8 +124,8 @@ export default function RegisterPage() {
                 onChange={(e) => setForm({ ...form, password: e.target.value })}
               />
             </div>
-            <Button type="submit" className="w-full mt-2">
-              Create Account
+            <Button type="submit" className="w-full mt-2" disabled={loading}>
+              {loading ? "Creating account..." : "Create Account"}
             </Button>
           </form>
 

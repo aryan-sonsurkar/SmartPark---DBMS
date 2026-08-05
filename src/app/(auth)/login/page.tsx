@@ -12,7 +12,7 @@ import { useAuth } from "@/lib/auth-context";
 export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuth();
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -22,7 +22,7 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
 
-    const result = await login(username, password);
+    const result = await login(email, password);
     if (result.error) {
       setError(result.error);
       setLoading(false);
@@ -70,12 +70,13 @@ export default function LoginPage() {
             <div className="relative">
               <Mail className="absolute left-3.5 top-[38px] w-4 h-4 text-muted-foreground" />
               <Input
-                label="Username"
-                id="username"
-                placeholder="Enter username"
+                label="Email"
+                type="email"
+                id="email"
+                placeholder="you@example.com"
                 className="pl-10"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
               />
             </div>
             <div className="relative">
@@ -84,7 +85,7 @@ export default function LoginPage() {
                 label="Password"
                 type="password"
                 id="password"
-                placeholder="Enter password"
+                placeholder="Enter your password"
                 className="pl-10"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -95,13 +96,12 @@ export default function LoginPage() {
             </Button>
           </form>
 
-          <div className="mt-4 p-3 bg-surface rounded-xl border border-border">
-            <p className="text-xs text-muted-foreground font-medium mb-1">Demo Credentials:</p>
-            <p className="text-xs text-muted-foreground">
-              Admin: <span className="font-mono text-foreground">admin</span> / <span className="font-mono text-foreground">admin123</span>
-            </p>
-            <p className="text-xs text-muted-foreground">
-              User: <span className="font-mono text-foreground">rahul</span> / <span className="font-mono text-foreground">rahul123</span>
+          <div className="mt-6 pt-6 border-t border-border text-center">
+            <p className="text-sm text-muted-foreground">
+              Don&apos;t have an account?{" "}
+              <Link href="/register" className="text-accent hover:text-accent/80 font-semibold">
+                Sign up
+              </Link>
             </p>
           </div>
         </div>

@@ -12,7 +12,7 @@ import { useAuth } from "@/lib/auth-context";
 import type { Vehicle } from "@/types";
 
 export default function MyVehiclesPage() {
-  const { user } = useAuth();
+  const { profile } = useAuth();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -56,7 +56,7 @@ export default function MyVehiclesPage() {
           vehicle_id: newId,
           vehicle_number: form.vehicle_number,
           vehicle_type: form.vehicle_type as Vehicle["vehicle_type"],
-          owner_id: user?.owner_id || 103,
+          owner_id: profile?.owner_id || 103,
         });
         const updated = await fetchVehicles();
         setVehicles(updated);

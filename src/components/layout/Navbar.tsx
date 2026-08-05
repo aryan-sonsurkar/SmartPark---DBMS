@@ -15,11 +15,11 @@ const navLinks = [
 export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, logout } = useAuth();
+  const { user, profile, logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     router.push("/login");
   };
 
@@ -51,7 +51,7 @@ export default function Navbar() {
                 {link.label}
               </Link>
             ))}
-            {user?.role === "admin" && (
+            {profile?.role === "admin" && (
               <Link
                 href="/admin"
                 className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${
@@ -73,8 +73,10 @@ export default function Navbar() {
                 <User className="w-3.5 h-3.5 text-white" />
               </div>
               <div className="text-sm">
-                <span className="font-medium">{user?.full_name}</span>
-                <span className="text-muted-foreground text-xs ml-1.5 capitalize">({user?.role})</span>
+                <span className="font-medium">{profile?.full_name || user?.email}</span>
+                {profile && (
+                  <span className="text-muted-foreground text-xs ml-1.5 capitalize">({profile.role})</span>
+                )}
               </div>
             </div>
             <button onClick={handleLogout} className="p-2.5 rounded-xl hover:bg-surface text-muted-foreground hover:text-foreground transition-colors border border-transparent hover:border-border">
@@ -103,7 +105,7 @@ export default function Navbar() {
                 {link.label}
               </Link>
             ))}
-            {user?.role === "admin" && (
+            {profile?.role === "admin" && (
               <Link
                 href="/admin"
                 onClick={() => setMobileOpen(false)}

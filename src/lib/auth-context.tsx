@@ -2,69 +2,107 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { supabase } from "@/lib/supabase";
+import type { User } from "@supabase/supabase-js";
 
-interface AppUser {
-  user_id: number;
-  username: string;
+interface Profile {
+  id: string;
   full_name: string;
   role: "admin" | "user";
-  owner_id?: number;
+  owner_id: number | null;
 }
 
 interface AuthContextType {
-  user: AppUser | null;
+  user: User | null;
+  profile: Profile | null;
   loading: boolean;
-  login: (username: string, password: string) => Promise<{ error?: string }>;
-  logout: () => void;
+  login: (email: string, password: string) => Promise<{ error?: string }>;
+  register: (email: string, password: string, fullName: string, phone: string) => Promise<{ error?: string }>;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
+  profile: null,
   loading: true,
   login: async () => ({}),
-  logout: () => {},
+  register: async () => ({}),
+  logout: async () => {},
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AppUser | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const fetchProfile = async (userId: string) => {
+    const { data } = await supabase
+      .from("profiles")
+      .select("id, full_name, role, owner_id")
+      .eq("id", userId)
+      .single();
+    return data as Profile | null;
+  };
+
   useEffect(() => {
-    const stored = localStorage.getItem("smartpark_user");
-    if (stored) {
-      try {
-        setUser(JSON.parse(stored));
-      } catch {
-        localStorage.removeItem("smartpark_user");
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        fetchProfile(session.user.id).then(setProfile);
       }
-    }
-    setLoading(false);
+      setLoading(false);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        fetchProfile(session.user.id).then(setProfile);
+      } else {
+        setProfile(null);
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  const login = async (username: string, password: string) => {
-    const { data, error } = await supabase
-      .from("app_user")
-      .select("user_id, username, full_name, role, owner_id")
-      .eq("username", username)
-      .eq("password", password)
-      .single();
-
-    if (error || !data) {
-      return { error: "Invalid username or password" };
+  const login = async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      return { error: error.message };
     }
-
-    setUser(data);
-    localStorage.setItem("smartpark_user", JSON.stringify(data));
     return {};
   };
 
-  const logout = () => {
+  const register = async (email: string, password: string, fullName: string, phone: string) => {
+    const { data, error } = await supabase.auth.signUp({ email, password });
+    if (error) {
+      return { error: error.message };
+    }
+
+    if (data.user) {
+      // Insert into profiles table
+      const { error: profileError } = await supabase.from("profiles").insert({
+        id: data.user.id,
+        full_name: fullName,
+        role: "user",
+        owner_id: null,
+      });
+
+      if (profileError) {
+        return { error: profileError.message };
+      }
+    }
+
+    return {};
+  };
+
+  const logout = async () => {
+    await supabase.auth.signOut();
     setUser(null);
-    localStorage.removeItem("smartpark_user");
+    setProfile(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, profile, loading, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   );
